@@ -1,12 +1,11 @@
 // See the file card-game.md for detailed information.
 
-// feel free to use these cards or use your own data structure
-
 type Suit =
     | Spade
     | Club
     | Diamond
     | Heart
+
 
 type Rank =
     | Value of int
@@ -15,93 +14,111 @@ type Rank =
     | King
     | Ace
 
+
 type Card = Suit * Rank
 
-let playRound (card1:Card,card2:Card) =      
-    let compareRank (card1:Card, card2:Card): Card option =
-        let rank1Value = match card1.[1] with
-            | Value v -> v
-            | Jack j -> 10
-            | Queen q -> 11
-            | King k -> 12
-            | Ace a -> 13
 
-        let rank2Value = match card2.[1] with
-            | Value v -> v
-            | Jack j -> 10
-            | Queen q -> 11
-            | King k -> 12
-            | Ace a -> 13
-
-        if rank1Value < rank2Value then
-            card2
-        elif rank1Value > rank2Value then
-            card1
-        else
-            None
-    
-    let compareSuit (card1:Card, card2:Card): Card option =
-        let suit1Value = match card1.[0] with
-            | Spade s -> 0
-            | Club c -> 1
-            | Diamond d -> 2
-            | Heart h -> 3
-
-        let suit2Value = match card2.[0] with
-            | Spade s -> 0
-            | Club c -> 1
-            | Diamond d -> 2
-            | Heart h -> 3
-
-        if suit1Value < suit2Value then
-            card2
-        elif suit1Value > suit2Value then
-            card1
-        else
-            None
-        
-    let winningCard = compareRank(card1, card2)
-    if winningCard != unit then
-        winningCard
-    else
-        compareSuit(card1, card2)
-
-let playGame (hand1:Card list, hand2:Card list) =
-    failwith "not implemented: game winner"
-
-(*
-let suits = [ Spade; Club; Diamond; Heart ]
-let heads = [ Jack; Queen; King; Ace ]
-
-let ranks =
-    [   for v in 2 .. 10 -> Value v
-        for head in heads -> head
+let ascendingSuits = [Spade; Club; Diamond; Heart];
+let ascendingHeads = [Jack; Queen; King; Ace];
+let ascendingRanks =
+    [
+        for v in 2 .. 10 -> Value v
+        for head in ascendingHeads -> head
     ]
 
-let deck = seq {
-    for suit in suits do
-        for rank in ranks -> suit,rank }
-*)
 
+// An entire deck of cards in ascending War value.
+let ascendingDeck =
+    seq {
+        for rank in ascendingRanks do
+            for suit in ascendingSuits -> suit, rank
+    }
+
+//
+// Converts a card into an integer representing its War value.
+//
+let cardToWarValue (theCard: Card): int =
+    ascendingDeck |> Seq.findIndex (fun curCard -> curCard = theCard)
+
+//
+// Plays a single round of War and returns the winning card.
+//
+let playRound (card1:Card, card2:Card) =
+    // Return the card with the maximum War value.
+    [card1; card2]
+    |> List.maxBy(fun curCard -> cardToWarValue(curCard))
+
+
+//
+// Splits a list into a tuple containing the first item and a list containing
+// all subseequnt items.
+//
+let pop a =
+    (List.head(a), a.[1..])
+
+
+type GameResult =
+    {
+        WinningPlayer: int
+        NumIterations: int
+    }
+
+//
+// Plays an entire game of War with the given two hands.
+//
+let playGame (hand1:Card list, hand2:Card list): GameResult =
+
+    // Recursive function that implements playGame().
+    let rec playGameImpl (hand1: Card list, hand2: Card list, iteration: int) =
+        if hand1.IsEmpty then
+            { WinningPlayer=2; NumIterations=iteration }
+        elif hand2.IsEmpty then
+            { WinningPlayer=1; NumIterations=iteration }
+        else
+            let (card1, remainingHand1) = pop hand1
+            let (card2, remainingHand2) = pop hand2
+            let winningCard = playRound(card1, card2)
+            if (winningCard = card1) then
+                playGameImpl (remainingHand1 @ [card1; card2], remainingHand2, iteration + 1)
+            else
+                playGameImpl (remainingHand1, remainingHand2 @ [card1; card2], iteration + 1)
+
+    // Kick start the recursion.
+    playGameImpl (hand1, hand2, 0)
+
+
+////////////////////////////////////////////////////////////////////////////////
+// Tests
+////////////////////////////////////////////////////////////////////////////////
 #r @"../packages/Unquote/lib/net45/Unquote.dll"
 open Swensen.Unquote
 
-// fill in tests for your game
 let tests () =
 
     // playRound
-    test <@ playRound((Spade, Value 5), (Diamond, Jack)) = (Diamond, Jack) @>
+    printfn "the highest rank wins the cards in the round"
+    test <@ playRound ((Heart, Value 7), (Club, Jack)) = (Club, Jack) @>
 
-    printfn "TODO: the highest rank wins the cards in the round"
-    printfn "TODO: queens are higher rank than jacks"
-    printfn "TODO: kings are higher rank than queens"
-    printfn "TODO: aces are higher rank than kings"
-    printfn "TODO: if the ranks are equal, clubs beat spades"
-    printfn "TODO: if the ranks are equal, diamonds beat clubs"
-    printfn "TODO: if the ranks are equal, hearts beat diamonds"
+    printfn "queens are higher rank than jacks"
+    test <@ playRound ((Spade, Queen), (Spade, Jack)) = (Spade, Queen) @>
+
+    printfn "kings are higher rank than queens"
+    test <@ playRound ((Spade, Queen), (Spade, King)) = (Spade, King) @>
+
+    printfn "aces are higher rank than kings"
+    test <@ playRound ((Spade, Ace), (Spade, King)) = (Spade, Ace) @>
+
+    printfn "if the ranks are equal, clubs beat spades"
+    test <@ playRound ((Spade, Value 8), (Club, Value 8)) = (Club, Value 8) @>
+
+    printfn "if the ranks are equal, diamonds beat clubs"
+    test <@ playRound ((Diamond, Value 8), (Club, Value 8)) = (Diamond, Value 8) @>
+
+    printfn "if the ranks are equal, hearts beat diamonds"
+    test <@ playRound ((Diamond, Value 8), (Heart, Value 8)) = (Heart, Value 8) @>
 
     // playGame
     printfn "TODO: the player loses when they run out of cards"
+    test <@ playGame ([(Heart, Value 9); (Club, Value 4)], [(Diamond, Queen); (Spade, Value 2)]) = {WinningPlayer=2; NumIterations=4} @>
 
-// run the tests
 tests ()
